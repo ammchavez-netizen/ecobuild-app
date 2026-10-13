@@ -1,0 +1,7 @@
+streamlit>=1.50
+scikit-learn>=1.4
+pandas>=2.0
+numpy>=1.26
+shap>=0.45
+altair>=5.0
+joblib>=1.3

@@ -1,0 +1,275 @@
+{
+  "created": "2026-10-13",
+  "random_state": 42,
+  "features": [
+    "Relative_Compactness",
+    "Surface_Area",
+    "Wall_Area",
+    "Roof_Area",
+    "Overall_Height",
+    "Orientation",
+    "Glazing_Area",
+    "Glazing_Area_Distribution"
+  ],
+  "num_features": [
+    "Relative_Compactness",
+    "Surface_Area",
+    "Wall_Area",
+    "Roof_Area",
+    "Overall_Height",
+    "Glazing_Area",
+    "Wall_to_Roof_Ratio",
+    "Envelope_per_Height",
+    "Glazing_x_Height",
+    "Is_Two_Story"
+  ],
+  "cat_features": [
+    "Orientation",
+    "Glazing_Area_Distribution"
+  ],
+  "targets": [
+    "Heating_Load",
+    "Cooling_Load"
+  ],
+  "best_model": {
+    "Heating_Load": "Gradient Boosting",
+    "Cooling_Load": "Gradient Boosting"
+  },
+  "best_params": {
+    "Heating_Load": {
+      "learning_rate": 0.05,
+      "max_depth": 5,
+      "n_estimators": 600,
+      "subsample": 1.0
+    },
+    "Cooling_Load": {
+      "learning_rate": 0.05,
+      "max_depth": 5,
+      "n_estimators": 600,
+      "subsample": 0.8
+    }
+  },
+  "test_metrics": [
+    {
+      "Target": "Cooling Load",
+      "Model": "Gradient Boosting",
+      "MAE": 0.617645131620744,
+      "RMSE": 1.3360466914193385,
+      "R2": 0.9807352256315616
+    },
+    {
+      "Target": "Cooling Load",
+      "Model": "Random Forest",
+      "MAE": 1.2427003830949623,
+      "RMSE": 1.9863871248376,
+      "R2": 0.9574158053535394
+    },
+    {
+      "Target": "Cooling Load",
+      "Model": "Linear Regression",
+      "MAE": 1.9141512662069622,
+      "RMSE": 2.587940197942589,
+      "R2": 0.927718171884779
+    },
+    {
+      "Target": "Heating Load",
+      "Model": "Gradient Boosting",
+      "MAE": 0.28200334582631703,
+      "RMSE": 0.4184213450815647,
+      "R2": 0.9983203264394813
+    },
+    {
+      "Target": "Heating Load",
+      "Model": "Random Forest",
+      "MAE": 0.36643948051947856,
+      "RMSE": 0.5173986003274258,
+      "R2": 0.9974316883446784
+    },
+    {
+      "Target": "Heating Load",
+      "Model": "Linear Regression",
+      "MAE": 1.5247489273127024,
+      "RMSE": 1.910655422774716,
+      "R2": 0.9649763046855463
+    }
+  ],
+  "shap_importance": [
+    {
+      "Target": "Heating_Load",
+      "Feature": "Relative_Compactness",
+      "Mean_abs_SHAP": 0.503733951968223
+    },
+    {
+      "Target": "Heating_Load",
+      "Feature": "Surface_Area",
+      "Mean_abs_SHAP": 0.9667366075370687
+    },
+    {
+      "Target": "Heating_Load",
+      "Feature": "Wall_Area",
+      "Mean_abs_SHAP": 1.1603339605286547
+    },
+    {
+      "Target": "Heating_Load",
+      "Feature": "Roof_Area",
+      "Mean_abs_SHAP": 2.2557940216247174
+    },
+    {
+      "Target": "Heating_Load",
+      "Feature": "Overall_Height",
+      "Mean_abs_SHAP": 5.9817044088797635
+    },
+    {
+      "Target": "Heating_Load",
+      "Feature": "Orientation",
+      "Mean_abs_SHAP": 0.100648822191253
+    },
+    {
+      "Target": "Heating_Load",
+      "Feature": "Glazing_Area",
+      "Mean_abs_SHAP": 1.9592675463930365
+    },
+    {
+      "Target": "Heating_Load",
+      "Feature": "Glazing_Area_Distribution",
+      "Mean_abs_SHAP": 0.2690202557584211
+    },
+    {
+      "Target": "Cooling_Load",
+      "Feature": "Relative_Compactness",
+      "Mean_abs_SHAP": 0.7403433303326193
+    },
+    {
+      "Target": "Cooling_Load",
+      "Feature": "Surface_Area",
+      "Mean_abs_SHAP": 0.7258049338829214
+    },
+    {
+      "Target": "Cooling_Load",
+      "Feature": "Wall_Area",
+      "Mean_abs_SHAP": 1.0607513060957443
+    },
+    {
+      "Target": "Cooling_Load",
+      "Feature": "Roof_Area",
+      "Mean_abs_SHAP": 3.8006238534305807
+    },
+    {
+      "Target": "Cooling_Load",
+      "Feature": "Overall_Height",
+      "Mean_abs_SHAP": 4.04780563972567
+    },
+    {
+      "Target": "Cooling_Load",
+      "Feature": "Orientation",
+      "Mean_abs_SHAP": 0.4518434673105478
+    },
+    {
+      "Target": "Cooling_Load",
+      "Feature": "Glazing_Area",
+      "Mean_abs_SHAP": 1.473851613663539
+    },
+    {
+      "Target": "Cooling_Load",
+      "Feature": "Glazing_Area_Distribution",
+      "Mean_abs_SHAP": 0.45405754771704265
+    }
+  ],
+  "shap_base_value": {
+    "Heating_Load": 22.326945895559064,
+    "Cooling_Load": 24.43664485473536
+  },
+  "valid_shapes": [
+    {
+      "Relative_Compactness": 0.62,
+      "Surface_Area": 808.5,
+      "Wall_Area": 367.5,
+      "Roof_Area": 220.5,
+      "Overall_Height": 3.5
+    },
+    {
+      "Relative_Compactness": 0.64,
+      "Surface_Area": 784.0,
+      "Wall_Area": 343.0,
+      "Roof_Area": 220.5,
+      "Overall_Height": 3.5
+    },
+    {
+      "Relative_Compactness": 0.66,
+      "Surface_Area": 759.5,
+      "Wall_Area": 318.5,
+      "Roof_Area": 220.5,
+      "Overall_Height": 3.5
+    },
+    {
+      "Relative_Compactness": 0.69,
+      "Surface_Area": 735.0,
+      "Wall_Area": 294.0,
+      "Roof_Area": 220.5,
+      "Overall_Height": 3.5
+    },
+    {
+      "Relative_Compactness": 0.71,
+      "Surface_Area": 710.5,
+      "Wall_Area": 269.5,
+      "Roof_Area": 220.5,
+      "Overall_Height": 3.5
+    },
+    {
+      "Relative_Compactness": 0.74,
+      "Surface_Area": 686.0,
+      "Wall_Area": 245.0,
+      "Roof_Area": 220.5,
+      "Overall_Height": 3.5
+    },
+    {
+      "Relative_Compactness": 0.76,
+      "Surface_Area": 661.5,
+      "Wall_Area": 416.5,
+      "Roof_Area": 122.5,
+      "Overall_Height": 7.0
+    },
+    {
+      "Relative_Compactness": 0.79,
+      "Surface_Area": 637.0,
+      "Wall_Area": 343.0,
+      "Roof_Area": 147.0,
+      "Overall_Height": 7.0
+    },
+    {
+      "Relative_Compactness": 0.82,
+      "Surface_Area": 612.5,
+      "Wall_Area": 318.5,
+      "Roof_Area": 147.0,
+      "Overall_Height": 7.0
+    },
+    {
+      "Relative_Compactness": 0.86,
+      "Surface_Area": 588.0,
+      "Wall_Area": 294.0,
+      "Roof_Area": 147.0,
+      "Overall_Height": 7.0
+    },
+    {
+      "Relative_Compactness": 0.9,
+      "Surface_Area": 563.5,
+      "Wall_Area": 318.5,
+      "Roof_Area": 122.5,
+      "Overall_Height": 7.0
+    },
+    {
+      "Relative_Compactness": 0.98,
+      "Surface_Area": 514.5,
+      "Wall_Area": 294.0,
+      "Roof_Area": 110.25,
+      "Overall_Height": 7.0
+    }
+  ],
+  "versions": {
+    "python": "3.13.16",
+    "scikit-learn": "1.9.1",
+    "pandas": "3.0.5",
+    "numpy": "2.5.3",
+    "shap": "0.53.0"
+  }
+}
