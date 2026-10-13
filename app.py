@@ -58,7 +58,8 @@ with st.sidebar:
     st.divider()
     st.caption("Group 3 — Veronica Broadway · Namita Moses · Anthony Chavez  \n"
                "Advisor: Dr. Clifford Whitworth  \n"
-               "UNT Anuradha and Vikas Sinha Department of Data Science")
+               "Course: DTSC 5082  \n"
+               "Department: UNT College of Artificial Intelligence and Advanced Analytics")
 
 st.title("EcoBuild: Building Energy Efficiency Predictor")
 tab_compare, tab_drivers, tab_perf, tab_about = st.tabs(
