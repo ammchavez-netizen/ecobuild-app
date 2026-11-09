@@ -42,6 +42,20 @@ def engineer_features(data: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+# A "design" is every input except orientation. Each design appears four times in the data (once per
+# orientation) with nearly identical loads, so train/test splits must keep those four rows together.
+DESIGN_COLS = [c for c in FEATURES if c != "Orientation"]
+
+
+def split_by_design(df: pd.DataFrame, test_size: float, random_state: int):
+    """Hold out whole designs: all four orientations of a design stay on the same side of the split."""
+    from sklearn.model_selection import GroupShuffleSplit
+    groups = df.groupby(DESIGN_COLS).ngroup()
+    train_idx, test_idx = next(
+        GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state).split(df, groups=groups))
+    return df.iloc[train_idx], df.iloc[test_idx]
+
+
 class EcoBuildModels:
     """Loads the saved model bundle; retrains from the bundled data if the saved models can't be loaded."""
 
@@ -85,7 +99,10 @@ class EcoBuildModels:
         from sklearn.preprocessing import OneHotEncoder
 
         df = self.data()
-        train, _ = train_test_split(df, test_size=0.20, random_state=self.meta["random_state"])
+        if "split" in self.meta:   # bundles exported with grouped validation hold out whole designs
+            train, _ = split_by_design(df, self.meta["split"]["test_size"], self.meta["random_state"])
+        else:                      # older bundles used a plain random split
+            train, _ = train_test_split(df, test_size=0.20, random_state=self.meta["random_state"])
         prep = ColumnTransformer([
             ("num", Pipeline([("imputer", SimpleImputer(strategy="median"))]), self.num_features),
             ("cat", Pipeline([("imputer", SimpleImputer(strategy="most_frequent")),
@@ -122,3 +139,42 @@ class EcoBuildModels:
             self._explainers[target] = shap.explainers.Exact(f, shap.maskers.Independent(bg, max_samples=50))
         sv = self._explainers[target](designs[FEATURES])
         return pd.DataFrame(sv.values, columns=FEATURES, index=designs.index), float(sv.base_values[0])
+
+
+# ---------------------------------------------------------------------------------- ranges and suggestions
+def design_variants(shape_row: pd.Series) -> pd.DataFrame:
+    """Every orientation / glazing amount / glazing layout available for one building form (64 designs)."""
+    rows = []
+    for o in ORIENTATION_LABELS:
+        for g in GLAZING_AREA_LABELS:
+            for d in ([0] if g == 0 else [1, 2, 3, 4, 5]):
+                rows.append({**shape_row.to_dict(), "Orientation": o, "Glazing_Area": g, "Glazing_Area_Distribution": d})
+    return pd.DataFrame(rows)[FEATURES]
+
+
+def suggest_changes(models: "EcoBuildModels", current: dict, shape_row: pd.Series, min_glazing: float = 0.0) -> dict:
+    """Best alternatives for one building form (the form itself never changes).
+
+    Options: rotate only, change the windows only (amount and layout), and the best of everything.
+    Each is the lowest predicted total load of its kind. Only designs with at least `min_glazing`
+    window share are considered, so the tool does not just recommend removing every window.
+    """
+    v = design_variants(shape_row)
+    v = pd.concat([v, models.predict(v)], axis=1)
+    v = v[v.Glazing_Area >= min_glazing]
+    cur = models.predict(pd.DataFrame([current])[FEATURES]).iloc[0]
+    same_o = v.Orientation == current["Orientation"]
+    same_w = (v.Glazing_Area == current["Glazing_Area"]) & (v.Glazing_Area_Distribution == current["Glazing_Area_Distribution"])
+    pools = {"Rotate the building": v[same_w & ~same_o],
+             "Change the windows": v[same_o & ~same_w],
+             "Best overall": v[~(same_o & same_w)]}
+    out, seen = {}, set()
+    for name, sub in pools.items():
+        if not len(sub):
+            continue
+        best = sub.sort_values("Total_Load").iloc[0]
+        key = (best.Orientation, best.Glazing_Area, best.Glazing_Area_Distribution)
+        if best.Total_Load < cur.Total_Load and key not in seen:
+            out[name] = best
+            seen.add(key)
+    return {"current": cur, "options": out, "all": v}
