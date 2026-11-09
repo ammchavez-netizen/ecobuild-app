@@ -10,8 +10,8 @@ import pandas as pd
 import streamlit as st
 
 from ecobuild_agent import OBJECTIVES, Constraints, describe_design, recommendation_text, run_agent
-from ecobuild_ai import (GROQ_MODELS, EcoBuildAssistant, EcoBuildTools, apply_brief, get_api_key, make_client,
-                         parse_brief, summarize_agent)
+from ecobuild_ai import (GROQ_MODELS, EcoBuildAssistant, EcoBuildTools, apply_brief, get_api_key, list_chat_models,
+                         make_client, parse_brief, summarize_agent)
 from ecobuild_core import (FEATURE_LABELS, FEATURES, GLAZING_AREA_LABELS, GLAZING_DIST_LABELS,
                            ORIENTATION_LABELS, TARGETS, EcoBuildModels, suggest_changes)
 from ecobuild_econ import Assumptions, business_case, fmt_money, fmt_payback
@@ -22,6 +22,11 @@ MODEL_DIR = Path(__file__).parent / "models"
 COLOR_A, COLOR_B = "#2a78d6", "#eb6834"          # Design A / Design B (used everywhere)
 COLOR_UP, COLOR_DOWN = "#e34948", "#1baf7a"      # raises load / lowers load
 TARGET_NAMES = {"Heating_Load": "Heating", "Cooling_Load": "Cooling", "Total_Load": "Total"}
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def available_groq_models(api_key: str) -> list[str]:
+    return list_chat_models(make_client(api_key))
 
 
 def esc(text: str) -> str:
@@ -112,7 +117,10 @@ with st.sidebar:
         else:
             GROQ_KEY = st.text_input("Groq API key", type="password",
                                      help="Free key at console.groq.com. Stored only in this browser session.") or None
-        GROQ_MODEL = st.selectbox("Model", GROQ_MODELS, help="Both models support tool calling on Groq.")
+        _models_for_key = available_groq_models(GROQ_KEY) if GROQ_KEY else GROQ_MODELS
+        GROQ_MODEL = st.selectbox("Model", _models_for_key,
+                                  help="Models your key can use, recommended first. If a model is retired, the "
+                                       "assistant automatically falls back to the next recommended one.")
     st.divider()
     st.caption("Group 3 — Veronica Broadway · Namita Moses · Anthony Chavez  \n"
                "Advisor: Dr. Clifford Whitworth  \n"

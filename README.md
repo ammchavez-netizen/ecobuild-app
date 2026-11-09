@@ -45,7 +45,7 @@ This repository also contains the notebooks behind the research paper
    You can also paste a key in the sidebar (**🤖 AI settings**) for the current session only.
 3. Without a key, everything works except the chat, the brief reader and the AI-written summary.
 
-The default model is `llama-3.3-70b-versatile`; `openai/gpt-oss-120b` can be chosen in the sidebar.
+The default model is `openai/gpt-oss-120b` (Groq retired `llama-3.3-70b-versatile` from free and Developer plans on 2026-08-16). The sidebar lists the models your key can use, and if a model is retired the assistant falls back to `openai/gpt-oss-20b` or `qwen/qwen3.6-27b` automatically.
 
 ## Cost assumptions (planning estimates)
 

@@ -196,3 +196,48 @@ def test_summary_only_sends_agent_numbers(models):
     client = FakeClient([text_turn("Memo.")])
     assert summarize_agent(client, "m", "brief", {"recommendations": {"x": "y"}, "v": np.float64(1.5)}) == "Memo."
     assert "1.5" in client.requests[0]["messages"][1]["content"]
+
+
+# ------------------------------------------------------------------------------------------------ model handling
+class NotFoundError(Exception):
+    """Stand-in for groq.NotFoundError (the code matches on the class name)."""
+
+
+def test_retired_model_falls_back_to_next(models):
+    from ecobuild_ai import GROQ_MODELS, chat_create
+
+    calls = []
+
+    def create(**kw):
+        calls.append(kw)
+        if kw["model"] == "llama-3.3-70b-versatile":
+            raise NotFoundError("Error code: 404 - model_not_found")
+        return text_turn(f"answered by {kw['model']}")
+
+    client = NS(chat=NS(completions=NS(create=create)))
+    resp, used = chat_create(client, "llama-3.3-70b-versatile", messages=[])
+    assert used == GROQ_MODELS[0] and "answered by" in resp.choices[0].message.content
+    assert calls[1].get("reasoning_effort") == "low"          # gpt-oss gets short reasoning
+
+
+def test_assistant_reports_when_no_model_is_available(models):
+    def create(**kw):
+        raise NotFoundError("Error code: 404 - The model does not exist or you do not have access to it.")
+    bot = EcoBuildAssistant(NS(chat=NS(completions=NS(create=create))), EcoBuildTools(models, Assumptions()), "x")
+    answer, _ = bot.reply([{"role": "user", "content": "hi"}])
+    assert "Pick another model" in answer
+
+
+def test_model_list_filters_non_chat_models():
+    from ecobuild_ai import list_chat_models
+    ids = ["whisper-large-v3", "openai/gpt-oss-20b", "meta-llama/llama-prompt-guard-2-22m", "qwen/qwen3.6-27b",
+           "groq/compound", "openai/gpt-oss-120b", "some/new-model"]
+    client = NS(models=NS(list=lambda: NS(data=[NS(id=i) for i in ids])))
+    assert list_chat_models(client) == ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b", "some/new-model"]
+    broken = NS(models=NS(list=lambda: (_ for _ in ()).throw(RuntimeError("offline"))))
+    assert list_chat_models(broken)[0] == "openai/gpt-oss-120b"
+
+
+def test_reasoning_tags_are_removed():
+    from ecobuild_ai import _strip_reasoning
+    assert _strip_reasoning("<think>internal</think>\nFinal answer.") == "Final answer."
