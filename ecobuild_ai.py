@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import replace
 
 import numpy as np
@@ -21,9 +22,58 @@ from ecobuild_agent import (OBJECTIVES, Constraints, describe_design, design_key
 from ecobuild_core import (FEATURE_LABELS, FEATURES, ORIENTATION_LABELS, TARGETS, EcoBuildModels, suggest_changes)
 from ecobuild_econ import Assumptions, business_case, fmt_money, fmt_payback, geometry
 
-GROQ_MODELS = ["llama-3.3-70b-versatile", "openai/gpt-oss-120b"]
+# Groq retired llama-3.3-70b-versatile from its free/Developer tiers on 2026-08-16 and recommends gpt-oss-120b
+# or qwen3.6-27b instead. Models change often, so the app also asks Groq which models the key can use
+# (list_chat_models) and falls back to the next model when one is not found.
+GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]
 DEFAULT_MODEL = os.environ.get("GROQ_MODEL", GROQ_MODELS[0])
 MAX_TOOL_ROUNDS = 6
+_NOT_CHAT = ("whisper", "guard", "tts", "orpheus", "playai", "compound", "prompt", "distil")
+
+
+def list_chat_models(client) -> list[str]:
+    """Chat models this API key can use, preferred ones first. Falls back to GROQ_MODELS on any error."""
+    try:
+        ids = [m.id for m in client.models.list().data]
+    except Exception:
+        return list(GROQ_MODELS)
+    chat = [i for i in ids if not any(x in i.lower() for x in _NOT_CHAT)]
+    preferred = [m for m in GROQ_MODELS if m in chat]
+    return preferred + sorted(m for m in chat if m not in preferred) or list(GROQ_MODELS)
+
+
+def _model_not_available(e: Exception) -> bool:
+    s = str(e).lower()
+    return (type(e).__name__ == "NotFoundError" or "model_not_found" in s or "decommissioned" in s
+            or ("model" in s and "does not exist" in s))
+
+
+def chat_create(client, model: str, **kw):
+    """chat.completions.create with model-specific settings and automatic fallback to the next available model.
+
+    Returns (response, model_used). Reasoning models get settings that keep their hidden reasoning short/out of the
+    answer text.
+    """
+    tried, last = [], None
+    for m in [model] + [x for x in GROQ_MODELS if x != model]:
+        args = dict(kw, model=m)
+        if "gpt-oss" in m:
+            args["reasoning_effort"] = "low"
+        elif "qwen3" in m:
+            args["reasoning_format"] = "hidden"
+        try:
+            return client.chat.completions.create(**args), m
+        except Exception as e:                      # only a missing/retired model moves on to the next one
+            if not _model_not_available(e):
+                raise
+            tried.append(m)
+            last = e
+    raise last
+
+
+def _strip_reasoning(text: str | None) -> str:
+    """Remove any <think>...</think> block a reasoning model leaves in its answer."""
+    return re.sub(r"<think>.*?</think>", "", text or "", flags=re.S).strip()
 
 ORIENT_IDS = {v.lower(): k for k, v in ORIENTATION_LABELS.items()}           # "north" -> 2
 DIST_IDS = {"none": 0, "uniform": 1, "north": 2, "east": 3, "south": 4, "west": 5}
@@ -296,12 +346,14 @@ class EcoBuildAssistant:
 
     def __init__(self, client, tools: EcoBuildTools, model: str = DEFAULT_MODEL):
         self.client, self.tools, self.model = client, tools, model
+        self.model_used = model
 
     def _create(self, messages, use_tools=True):
-        kw = dict(model=self.model, messages=messages, temperature=0.2, max_tokens=1200)
+        kw = dict(messages=messages, temperature=0.2, max_completion_tokens=2048)
         if use_tools:
             kw.update(tools=TOOLS, tool_choice="auto")
-        return self.client.chat.completions.create(**kw)
+        resp, self.model_used = chat_create(self.client, self.model_used, **kw)
+        return resp
 
     def reply(self, history: list[dict]) -> tuple[str, list[dict]]:
         """history: [{"role": "user"|"assistant", "content": str}, ...]. Returns (answer, tool_log)."""
@@ -322,7 +374,7 @@ class EcoBuildAssistant:
             msg = resp.choices[0].message
             calls = getattr(msg, "tool_calls", None) or []
             if not calls:
-                return (msg.content or "").strip(), log
+                return _strip_reasoning(msg.content), log
             messages.append({"role": "assistant", "content": msg.content or "",
                              "tool_calls": [{"id": c.id, "type": "function",
                                              "function": {"name": c.function.name, "arguments": c.function.arguments}}
@@ -336,16 +388,20 @@ class EcoBuildAssistant:
                 log.append({"tool": c.function.name, "args": args, "result": result})
                 messages.append({"role": "tool", "tool_call_id": c.id, "content": json.dumps(result)})
         resp = self._create(messages, use_tools=False)    # out of tool rounds: answer with what we have
-        return (resp.choices[0].message.content or "").strip(), log
+        return _strip_reasoning(resp.choices[0].message.content), log
 
 
 def _friendly_error(e: Exception) -> str:
     s = str(e)
     if "401" in s or "invalid_api_key" in s.lower() or "authentication" in s.lower():
         return "The Groq API key was rejected. Check the key in the sidebar or in Streamlit secrets."
+    if _model_not_available(e):
+        return ("None of the AI models is available to this Groq key (Groq retires models from time to time). "
+                "Pick another model in the sidebar under AI settings.")
     if "429" in s or "rate" in s.lower():
         return "The AI service is rate-limited right now. Wait a few seconds and try again."
-    return f"The AI service returned an error, so I could not answer. ({type(e).__name__})"
+    detail = getattr(e, "message", None) or s
+    return f"The AI service returned an error, so I could not answer. ({type(e).__name__}: {detail[:200]})"
 
 
 # =============================================================================================== agent helpers
@@ -367,8 +423,8 @@ BRIEF_TOOL = _fn(
 
 def parse_brief(client, model: str, brief: str) -> dict:
     """Use the LLM to turn a plain-English brief into agent settings (validated by the caller)."""
-    resp = client.chat.completions.create(
-        model=model, temperature=0, max_tokens=400, tools=[BRIEF_TOOL],
+    resp, _ = chat_create(
+        client, model, temperature=0, max_completion_tokens=1024, tools=[BRIEF_TOOL],
         tool_choice={"type": "function", "function": {"name": "configure_design_agent"}},
         messages=[{"role": "system", "content":
                    "Extract design-agent settings from the brief. Forms 1-6 are one-story, 7-12 two-story. "
@@ -415,11 +471,11 @@ def apply_brief(settings: dict, baseline: dict, constraints: Constraints, assump
 
 def summarize_agent(client, model: str, brief: str, result_dict: dict) -> str:
     """LLM executive summary of the agent's results — numbers only from `result_dict`."""
-    resp = client.chat.completions.create(
-        model=model, temperature=0.2, max_tokens=500,
+    resp, _ = chat_create(
+        client, model, temperature=0.2, max_completion_tokens=1500,
         messages=[{"role": "system", "content":
                    "You write a short decision memo (max 150 words) for an architect and their client. Use ONLY numbers "
                    "from the JSON. Lead with the recommendation, then why (drivers), the money (savings, extra cost, "
                    "payback, NPV), and one caution (uncertainty, cost assumptions or data limits). Plain language, bullets ok."},
                   {"role": "user", "content": f"Brief: {brief or '(none)'}\n\nAgent results:\n{json.dumps(_clean(result_dict))}"}])
-    return (resp.choices[0].message.content or "").strip()
+    return _strip_reasoning(resp.choices[0].message.content)
