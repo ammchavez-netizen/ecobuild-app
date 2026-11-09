@@ -5,3 +5,4 @@ numpy>=1.26
 shap>=0.45
 altair>=5.0
 joblib>=1.3
+groq>=0.11
