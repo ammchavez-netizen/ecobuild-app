@@ -34,6 +34,68 @@ It also helps people **decide**, not just predict:
 This repository also contains the notebooks behind the research paper
 *Testing on Unseen Designs: How Validation Strategy Affects Reported Accuracy in Building Energy Load Prediction*.
 
+## How to run
+
+**Requirements:** Python 3.11 or newer (tested on 3.12 and 3.13) and Git.
+
+1. **Get the code**
+
+   ```bash
+   git clone https://github.com/ammchavez-netizen/ecobuild-app.git
+   cd ecobuild-app
+   ```
+
+2. **Create and activate a virtual environment**
+
+   Windows (Command Prompt or PowerShell):
+
+   ```bash
+   py -m venv .venv
+   .venv\Scripts\activate
+   ```
+
+   macOS / Linux:
+
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+
+   If PowerShell blocks `activate` with a "running scripts is disabled" error, run
+   `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, then activate again.
+
+3. **Install the packages**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Start the app**
+
+   ```bash
+   streamlit run app.py
+   ```
+
+   The app opens in your browser at http://localhost:8501. Press **Ctrl+C** in the terminal to stop it, and run
+   `deactivate` to leave the virtual environment.
+
+5. **Optional: turn on the AI assistant.** Add a free Groq API key, as described in
+   [Turn on the AI assistant](#turn-on-the-ai-assistant). Without a key, every tab works except the chat, the brief
+   reader and the AI-written summary.
+
+**Run the tests (optional):**
+
+```bash
+pip install pytest
+pytest
+```
+
+**Notes**
+
+- The first start takes a few seconds while the models and the SHAP explainer load.
+- The trained models are in `models/`. If your scikit-learn version cannot load them, the app retrains them
+  automatically from `models/ENB2012_data.csv` with the same settings and shows a note in the sidebar.
+
 ## Files
 
 | Path | What it is |
