@@ -6,11 +6,15 @@ EcoBuild helps architects compare early building designs before construction beg
 cooling energy loads from eight design features, explains what drives the difference between designs, and turns the
 predictions into cost, payback and CO₂ estimates.
 
+![EcoBuild Streamlit app showing the "What drives energy use" tab: SHAP feature importance for heating and cooling load](models/streamlit.png)
+
+*The EcoBuild app: which design features drive heating and cooling load (mean |SHAP| values).*
+
 ## Project team
 
 - **School:** University of North Texas
 - **Course:** DTSC 5082
-- **Professor:** Clifford Whitworth
+- **Professor:** [Clifford Whitworth](https://unt.instructure.com/courses/150317/users/1129)
 - **Team members:** Anthony Chavez, Namita Moses, Veronica Broadway
 
 ## What the app does
