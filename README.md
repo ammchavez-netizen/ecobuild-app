@@ -1,5 +1,20 @@
 # EcoBuild — Building Energy Efficiency Predictor
 
+**A school project for DTSC 5082 at the University of North Texas.**
+
+EcoBuild helps architects compare early building designs before construction begins. It predicts heating and
+cooling energy loads from eight design features, explains what drives the difference between designs, and turns the
+predictions into cost, payback and CO₂ estimates.
+
+## Project team
+
+- **School:** University of North Texas
+- **Course:** DTSC 5082
+- **Professor:** Clifford Whitworth
+- **Team members:** Anthony Chavez, Namita Moses, Veronica Broadway
+
+## What the app does
+
 EcoBuild compares early-stage building designs. For each design it predicts **heating load**, **cooling load**
 and **total load** (kWh/m²) with Gradient Boosting models, shows a typical error range for every prediction,
 explains the differences with **SHAP**, and suggests orientation and window changes for a chosen building form.
@@ -63,4 +78,5 @@ so the footprint equals the roof area). Loads are treated as annual kWh per m² 
 ## Reproduce the research paper
 
 1. Open `notebooks/EcoBuild_Paper_Figures.ipynb` in Google Colab or Jupyter.
-2. In Colab, upload `ENB2012_data.xlsx` when asked. In Jupyter, copy `ENB2012_data.xlsx`
+2. In Colab, upload `ENB2012_data.xlsx` when asked. In Jupyter, copy `ENB2012_data.xlsx` (from `dataset/`) into the same folder as the notebook.
+3. Run all cells.
