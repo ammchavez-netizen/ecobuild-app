@@ -12,10 +12,10 @@ predictions into cost, payback and CO₂ estimates.
 
 ## Project team
 
-- **School:** University of North Texas
-- **Course:** DTSC 5082
-- **Professor:** [Clifford Whitworth](https://unt.instructure.com/courses/150317/users/1129)
 - **Team members:** Anthony Chavez, Namita Moses, Veronica Broadway
+- **Course:** DTSC 5082 (Fall, 2026)
+- **Professor:** Clifford Whitworth
+- **School:** University of North Texas
 
 ## What the app does
 
