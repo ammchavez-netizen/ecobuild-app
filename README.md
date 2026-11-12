@@ -1,7 +1,5 @@
 # EcoBuild — Building Energy Efficiency Predictor
 
-**A school project for DTSC 5082 at the University of North Texas.**
-
 EcoBuild helps architects compare early building designs before construction begins. It predicts heating and
 cooling energy loads from eight design features, explains what drives the difference between designs, and turns the
 predictions into cost, payback and CO₂ estimates.
@@ -14,7 +12,6 @@ predictions into cost, payback and CO₂ estimates.
 
 - **Team members:** Anthony Chavez, Namita Moses, Veronica Broadway
 - **Course:** DTSC 5082 (Fall, 2026)
-- **Professor:** Clifford Whitworth
 - **School:** University of North Texas
 
 ## What the app does
