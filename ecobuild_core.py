@@ -178,3 +178,38 @@ def suggest_changes(models: "EcoBuildModels", current: dict, shape_row: pd.Serie
             out[name] = best
             seen.add(key)
     return {"current": cur, "options": out, "all": v}
+
+
+# ---------------------------------------------------------------------------------- calibrated ranges
+# metadata["ranges"] holds conformal ranges calibrated per building type (see ecobuild_trust.py). Older bundles
+# only have one number per target ("half_width" / "gap"); these helpers fall back to that.
+def story_type(height: float) -> str:
+    return "two_story" if float(height) >= 7 else "one_story"
+
+
+def range_half_width(ranges: dict | None, height: float, target: str) -> float | None:
+    """± range for one prediction of a one- or two-story design."""
+    if not ranges:
+        return None
+    by = ranges.get("by_type")
+    return float(by[story_type(height)][target]) if by else float(ranges["half_width"][target])
+
+
+def pair_gap(ranges: dict | None, height_a: float, height_b: float, target: str) -> float | None:
+    """± range for the *difference* between two designs. A smaller difference is "too close to call"."""
+    if not ranges:
+        return None
+    by = ranges.get("gap_by_pair")
+    if not by:
+        return float(ranges["gap"][target])
+    a, b = story_type(height_a), story_type(height_b)
+    return float(by[a if a == b else "mixed"][target])
+
+
+def gap_table(ranges: dict | None, designs: pd.DataFrame, baseline) -> pd.DataFrame | None:
+    """Gap range of every design versus the baseline row, one column per target (for business_case)."""
+    if not ranges:
+        return None
+    h0 = designs.loc[baseline, "Overall_Height"]
+    return pd.DataFrame({t: [pair_gap(ranges, h0, h, t) for h in designs.Overall_Height]
+                         for t in TARGETS + ["Total_Load"]}, index=designs.index)

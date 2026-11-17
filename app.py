@@ -13,7 +13,8 @@ from ecobuild_agent import OBJECTIVES, Constraints, describe_design, recommendat
 from ecobuild_ai import (GROQ_MODELS, EcoBuildAssistant, EcoBuildTools, apply_brief, get_api_key, list_chat_models,
                          make_client, parse_brief, summarize_agent)
 from ecobuild_core import (FEATURE_LABELS, FEATURES, GLAZING_AREA_LABELS, GLAZING_DIST_LABELS,
-                           ORIENTATION_LABELS, TARGETS, EcoBuildModels, suggest_changes)
+                           ORIENTATION_LABELS, TARGETS, EcoBuildModels, gap_table, pair_gap, range_half_width,
+                           suggest_changes)
 from ecobuild_econ import Assumptions, business_case, fmt_money, fmt_payback
 
 st.set_page_config(page_title="EcoBuild", page_icon="🏢", layout="wide")
@@ -42,15 +43,23 @@ def get_models() -> EcoBuildModels:
 models = get_models()
 meta = models.meta
 shapes = models.shapes()
-RANGES = meta.get("ranges")   # prediction ranges; bundles exported before Update 4 don't have them
+RANGES = meta.get("ranges")       # calibrated 90% ranges; bundles exported before Update 4 don't have them
+BACKTEST = meta.get("backtest")   # recommendation backtest (tools/build_trust_report.py)
+LEVEL = f"{RANGES['level']:.0%}" if RANGES else ""
 
 
-def half_width(target: str):
-    return RANGES["half_width"][target] if RANGES else None
+def half_width(target: str, design: dict):
+    """± range for one prediction; wider for two-story buildings."""
+    return range_half_width(RANGES, design["Overall_Height"], target)
 
 
-def gap_threshold(target: str):
-    return RANGES["gap"][target] if RANGES else None
+def gap_threshold(target: str, design_a: dict, design_b: dict):
+    """A difference smaller than this is too close to call."""
+    return pair_gap(RANGES, design_a["Overall_Height"], design_b["Overall_Height"], target)
+
+
+def stories(design: dict) -> str:
+    return "two-story" if design["Overall_Height"] >= 7 else "one-story"
 
 
 def shape_label(i: int) -> str:
@@ -180,19 +189,22 @@ with tab_compare:
             ca.metric("Design A", f"{a[t]:.1f}")
             cb.metric("Design B", f"{b[t]:.1f}", delta=f"{b[t] - a[t]:+.1f} vs A", delta_color="inverse")
             if RANGES:
-                st.caption(f"Typical error of each prediction: ± {half_width(t):.1f}")
+                st.caption(f"{LEVEL} range: A ± {half_width(t, design_a):.1f}, B ± {half_width(t, design_b):.1f}")
     st.caption("Loads in kWh/m². Lower is more energy-efficient. Green delta = Design B uses less than Design A."
-               + (f" The typical error is the range that about {RANGES['level']:.0%} of designs the model had never seen "
-                  "landed inside." if RANGES else ""))
+               + (f" **{LEVEL} range:** calibrated separately for one- and two-story buildings on designs the model "
+                  f"never saw; about {LEVEL} of such designs land inside it. It is an average over many designs, "
+                  "not a guarantee for this one, and it says nothing about real buildings or other shapes."
+                  if RANGES else ""))
 
     diff_pct = (b.Total_Load - a.Total_Load) / a.Total_Load * 100
-    too_close = RANGES and abs(b.Total_Load - a.Total_Load) <= gap_threshold("Total_Load")
+    thr_ab = gap_threshold("Total_Load", design_a, design_b) if RANGES else None
+    too_close = RANGES and abs(b.Total_Load - a.Total_Load) <= thr_ab
     if abs(diff_pct) < 2:
         st.info(f"The two designs have nearly the same total load ({diff_pct:+.1f}%).")
     elif too_close:
         st.info(f"**Too close to call.** The total loads differ by {abs(b.Total_Load - a.Total_Load):.1f} kWh/m², "
-                f"which is within the model's typical error when comparing two designs "
-                f"(±{gap_threshold('Total_Load'):.1f}). Treat these two as a tie.")
+                f"which is inside the model's {LEVEL} range for the difference between two designs like these "
+                f"(±{thr_ab:.1f}). Treat these two as a tie.")
     else:
         better, worse = ("A", "B") if diff_pct > 0 else ("B", "A")
         saving = abs(b.Total_Load - a.Total_Load) / max(a.Total_Load, b.Total_Load) * 100
@@ -201,7 +213,7 @@ with tab_compare:
                    f"({abs(b.Total_Load - a.Total_Load):.1f} kWh/m² less).")
 
     # ------------------------------------------------------------- business view
-    bc = business_case(designs, pred, ASSUMPTIONS, "Design A", RANGES["gap"] if RANGES else None)
+    bc = business_case(designs, pred, ASSUMPTIONS, "Design A", gap_table(RANGES, designs, "Design A"))
     rb = bc.loc["Design B"]
     with st.container(border=True):
         st.markdown(f"**💲 What it means in dollars** · {ASSUMPTIONS.floor_area_m2:,.0f} m² project, "
@@ -216,7 +228,7 @@ with tab_compare:
                   help="Positive = choosing B over A is worth it financially over the horizon.")
         m5.metric("CO₂, B vs A", f"{-rb.co2_saved_t_per_yr:+.1f} t/yr", delta_color="off")
         st.caption(esc(f"Energy savings of B vs A: {fmt_money(rb.annual_savings)}/yr "
-                       f"(range {fmt_money(rb.savings_low)} to {fmt_money(rb.savings_high)} from the model's typical error). "
+                       f"(range {fmt_money(rb.savings_low)} to {fmt_money(rb.savings_high)} from the model's {LEVEL} range). "
                        f"Payback: {fmt_payback(rb.payback_years)}. Construction costs are placeholders: edit them in the sidebar."))
 
     chart_df = (pred[TARGETS].rename(columns=TARGET_NAMES).reset_index(names="Design")
@@ -314,7 +326,8 @@ with tab_improve:
         st.success("No change we tested lowers the predicted load for this design. It is already the best "
                    "setup within your limits.")
     else:
-        thr = gap_threshold("Total_Load") if RANGES else None
+        thr = gap_threshold("Total_Load", current, current) if RANGES else None   # same form, same stories
+        record = (BACKTEST or {}).get("by_design", {}).get("suggest", {}).get("by_option_and_flag", {})
         cols = st.columns(len(res["options"]), gap="large")
         for col, (name, opt) in zip(cols, res["options"].items()):
             saving = cur.Total_Load - opt.Total_Load
@@ -324,12 +337,21 @@ with tab_improve:
                 st.metric("Predicted total load", f"{opt.Total_Load:.1f}", delta=f"{-saving:.1f} vs now",
                           delta_color="inverse")
                 if RANGES:
-                    st.caption(f"± {half_width('Total_Load'):.1f} · heating {opt.Heating_Load:.1f}, cooling {opt.Cooling_Load:.1f}")
-                    if saving > thr:
-                        st.success(f"Saves about {saving / cur.Total_Load:.0%}. Larger than the model's typical error.")
+                    clear = saving > thr
+                    st.caption(f"{LEVEL} range ± {half_width('Total_Load', current):.1f} · heating {opt.Heating_Load:.1f}, "
+                               f"cooling {opt.Cooling_Load:.1f}")
+                    if clear:
+                        st.success(f"Saves about {saving / cur.Total_Load:.0%}. Larger than the {LEVEL} range for a "
+                                   f"difference (±{thr:.1f}).")
                     else:
-                        st.warning(f"Saves about {saving / cur.Total_Load:.0%}, but that is within the model's "
-                                   f"typical error (±{thr:.1f}). Treat it as uncertain.")
+                        st.warning(f"Saves about {saving / cur.Total_Load:.0%}, but that is inside the {LEVEL} range for "
+                                   f"a difference (±{thr:.1f}). Too close to call.")
+                    tr = record.get(f"{name} · {'clear' if clear else 'too close to call'}")
+                    if tr and tr["n"] >= 20:
+                        st.caption(f"**Track record:** in the backtest, {tr['saves_energy']:.0%} of "
+                                   f"{'clear' if clear else 'too-close-to-call'} '{name.lower()}' suggestions truly "
+                                   f"saved energy in the simulation (n = {tr['n']}, average true saving "
+                                   f"{tr['mean_true_saving']:.1f} kWh/m²).")
                 else:
                     st.caption(f"heating {opt.Heating_Load:.1f}, cooling {opt.Cooling_Load:.1f}")
 
@@ -356,8 +378,10 @@ with tab_improve:
                      .rename(columns={"Heating_Load": "Heating", "Cooling_Load": "Cooling", "Total_Load": "Total"})
                      .style.format({"Heating": "{:.1f}", "Cooling": "{:.1f}", "Total": "{:.1f}"}),
                      width="stretch", hide_index=True)
-    st.caption("The building form (shape and height) is fixed here because the model has only seen 12 forms. "
-               "Savings are predictions from simulated data for one climate, so use them to rank options, not to promise savings.")
+    st.caption("The building form (shape and height) is fixed here because the model has only seen 12 forms, so every "
+               "suggestion is one of the 768 simulated designs. Savings are predictions from simulated data for one "
+               "climate, so use them to rank options, not to promise savings. See **Model performance → Can you trust "
+               "the recommendations?** for how these suggestions scored against the simulator.")
 
 
 # ============================================================================ design agent tab
@@ -454,7 +478,8 @@ with tab_agent:
 
     st.subheader("Recommendations")
     if not R.recommendations:
-        st.warning("No feasible alternative to the baseline under these constraints. Relax a constraint and try again.")
+        st.warning("No feasible design beats the baseline on this goal under these constraints, so the agent "
+                   "recommends keeping the baseline. Relax a constraint (budget, windows, orientation) to see options.")
     else:
         base_row = R.table.loc[R.baseline_key]
         cols = st.columns(len(R.recommendations), gap="medium")
@@ -470,7 +495,7 @@ with tab_agent:
                 st.caption(esc(f"Payback: {fmt_payback(r.payback_years)} · NPV {fmt_money(r.npv)} · "
                                f"CO₂ {-r.co2_saved_t_per_yr:+.1f} t/yr"))
                 if r.within_error:
-                    st.warning("Energy difference is within the model's typical error: treat it as a tie.")
+                    st.warning(f"Energy difference is inside the model's {LEVEL} range: too close to call.")
         if R.robust is not None:
             (st.success if R.robust else st.warning)(
                 "✔ Robust: the same design stays on top when construction costs move ±25%." if R.robust else
@@ -480,6 +505,14 @@ with tab_agent:
         if R.explanation:
             st.markdown("**Why the recommended design is different (SHAP, vs. baseline):** " +
                         ", ".join(f"{f} {v:+.1f} kWh/m²" for f, v in R.explanation))
+        ag = (BACKTEST or {}).get("by_design", {}).get("agent", {}).get(constraints.objective)
+        if ag:
+            gain = (f"{ag['mean_true_gain']:.1f} kWh/m²" if ag["unit"] == "kWh/m²" else fmt_money(ag["mean_true_gain"]))
+            st.caption(esc(f"**Track record for '{constraints.objective}':** we ran the agent from {ag['n']} starting "
+                           f"designs (default constraints) using models that had never seen the designs, then checked the picks against the "
+                           f"simulator. {ag['beats_baseline']:.0%} of picks truly beat the baseline (average true gain "
+                           f"{gain}), and every pick met the constraints and is one of the 768 simulated designs. "
+                           "Details in Model performance."))
 
         # trade-off chart
         st.subheader("Trade-off: cost to build vs. cost to run")
@@ -672,6 +705,83 @@ with tab_perf:
     st.caption("MAE = mean absolute error · RMSE = root mean squared error (both kWh/m², lower is better) · "
                "R² = share of variance explained (higher is better).")
 
+    if RANGES and "by_type" in RANGES:
+        st.divider()
+        st.subheader(f"How wide are the {LEVEL} ranges, and do they hold?")
+        st.markdown(
+            f"An average error (MAE) is not a range you can rely on. EcoBuild's ranges are **conformal prediction "
+            f"ranges**: we measured the errors of models that had not seen a design (5-fold cross-validation on the "
+            f"training designs, all four orientations kept together) and took the size that covers {LEVEL} of designs. "
+            "This is done **separately for one-story and two-story buildings**, because two-story errors are much larger. "
+            "We then checked the ranges on designs that were never used for training or calibration.")
+        rows = []
+        for key, label in (("one_story", "One-story"), ("two_story", "Two-story")):
+            for t in ["Heating_Load", "Cooling_Load", "Total_Load"]:
+                rows.append({"Building": label, "Load": TARGET_NAMES[t],
+                             "Range (± kWh/m²)": RANGES["by_type"][key][t],
+                             "Inside range, 39 test designs": RANGES["heldout"]["range"][key][t],
+                             f"Inside range, avg of {RANGES['repeated']['n_splits']} random splits":
+                                 RANGES["repeated"]["range"][key][t]["mean"],
+                             "Worst split": RANGES["repeated"]["range"][key][t]["min"]})
+        rt = pd.DataFrame(rows)
+        st.dataframe(rt.style.format({c: "{:.0%}" for c in rt.columns[3:]} | {"Range (± kWh/m²)": "{:.2f}"}),
+                     width="stretch", hide_index=True)
+        g = RANGES["gap_by_pair"]
+        st.caption(
+            f"Target: {LEVEL}. A range covers a design only if all four orientations land inside it, so coverage is often "
+            f"above {LEVEL}. **Comparing two designs** uses a separate range for the difference: ±{g['one_story']['Total_Load']:.1f} "
+            f"(two one-story), ±{g['two_story']['Total_Load']:.1f} (two two-story), ±{g['mixed']['Total_Load']:.1f} (one of each) "
+            "kWh/m² of total load; smaller differences are shown as too close to call. "
+            "**What the ranges do not promise:** coverage is an average over many designs, a single split can fall "
+            "below it (see *Worst split*), and nothing here covers real buildings, other climates or other shapes.")
+
+    if BACKTEST:
+        bd, bf = BACKTEST["by_design"], BACKTEST["by_form"]
+        sg, ag_e, ag_v = bd["suggest"], bd["agent"]["Lowest energy use"], bd["agent"]["Best value (highest NPV)"]
+        st.divider()
+        st.subheader("Can you trust the recommendations?")
+        st.markdown(
+            "Every design EcoBuild can recommend was simulated, so we know its true load. We predicted every design with "
+            "a model that had **never seen that design**, ran the app's own *Suggest improvements* and *Design agent* "
+            f"code from {bd['starting_designs']} starting designs (all with at least 10% windows), and scored each pick "
+            "against the simulator.")
+        c = st.columns(4)
+        c[0].metric("Clear suggestions: truly save", f"{sg['certain']['saves_energy']:.0%}",
+                    help=f"{sg['certain']['n']} suggestions whose predicted saving was larger than the {LEVEL} range.")
+        c[1].metric("'Too close': truly save", f"{sg['uncertain']['saves_energy']:.0%}",
+                    help="Close to a coin flip, which is why the app labels them as uncertain.")
+        c[2].metric("Agent: beats baseline", f"{ag_e['beats_baseline']:.0%}",
+                    help=f"Energy goal, default constraints. Average true saving {ag_e['mean_true_gain']:.1f} kWh/m² vs predicted {ag_e['mean_pred_gain']:.1f}.")
+        c[3].metric("Agent: near true best", f"{ag_e['near_best']:.0%}",
+                    help=f"Within 1 kWh/m² of the truly best of about {ag_e['median_feasible']:.0f} feasible designs. Average shortfall (regret): "
+                         f"{ag_e['mean_regret']:.2f} kWh/m².")
+        tbl = pd.DataFrame([{"Suggestion": k.split(" · ")[0], "Label in the app": k.split(" · ")[1], "Count": v["n"],
+                             "Truly saves energy": v["saves_energy"], "Predicted saving": v["mean_pred_saving"],
+                             "True saving": v["mean_true_saving"]}
+                            for k, v in sg["by_option_and_flag"].items()])
+        st.dataframe(tbl.style.format({"Truly saves energy": "{:.0%}", "Predicted saving": "{:.1f}",
+                                       "True saving": "{:.1f}"}), width="stretch", hide_index=True)
+        st.markdown(
+            f"- **The 'too close to call' label works.** Clear window changes save energy almost every time; "
+            f"suggestions inside the range are close to a coin flip.\n"
+            f"- **Rotating the building is the weakest suggestion.** Orientation barely changes the simulated load, so "
+            f"rotation-only suggestions were right only about "
+            f"{sg['Rotate the building']['saves_energy']:.0%} of the time. Treat them as optional.\n"
+            f"- **The best overall change captures {sg['Best overall']['share_of_best_possible']:.0%} of the best "
+            f"possible saving** for that form (true best known from the simulator).\n"
+            f"- **Best-value goal:** {ag_v['beats_baseline']:.0%} of agent picks truly had a positive NPV against the "
+            f"baseline when recomputed with simulated loads (median rank {ag_v['median_true_rank']:.0f} of "
+            f"~{ag_v['median_feasible']:.0f}). This checks the energy model only; the cost inputs are still assumptions.\n"
+            f"- **Physically feasible by construction:** every recommendation is one of the 768 simulated designs and "
+            f"met the brief's constraints in {ag_e['constraints_met']:.0%} of runs.\n"
+            f"- **Harder stress test (building form never seen):** model error grows to "
+            f"{bf['model_mae']['Total_Load']:.1f} kWh/m², yet {bf['agent']['Lowest energy use']['beats_baseline']:.0%} "
+            f"of energy picks still beat the baseline, because ranking options is easier than predicting exact loads. "
+            "The app still only offers the 12 known forms.")
+        st.caption("Backtest = scoring past recommendations against known answers. Answers come from the same simulator "
+                   "as the training data, so this shows the tool ranks options well in that world, not that real "
+                   "buildings will save the same amount. Reproduce with `python tools/build_trust_report.py`.")
+
 
 # ============================================================================ about tab
 with tab_about:
@@ -712,7 +822,10 @@ with tab_road:
     st.markdown(
         "- Two models (heating and cooling) trained on 768 simulated buildings, tested on "
         + (f"**{sp['n_test_designs']} whole designs they never saw**." if sp else "a held-out test set.") + "\n"
-        "- Predictions come with a typical-error range, and the app says when two designs are too close to call.\n"
+        "- Predictions come with a 90% range calibrated separately for one- and two-story buildings and checked on "
+        "unseen designs, and the app says when two designs are too close to call.\n"
+        "- Recommendations were **backtested against the simulator** with models that never saw the designs "
+        "(see Model performance).\n"
         "- Users can compare two designs, see why they differ, and get suggested changes for a building form.\n"
         "- **New: decision support.** A cost model turns loads into energy cost, construction cost, payback, NPV and CO₂; "
         "a **design agent** searches all 768 designs under constraints and recommends options; an **AI assistant** "

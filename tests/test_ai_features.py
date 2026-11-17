@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT))
 from ecobuild_agent import Constraints, pareto_front, run_agent  # noqa: E402
 from ecobuild_ai import (TOOLS, EcoBuildAssistant, EcoBuildTools, apply_brief, parse_brief,  # noqa: E402
                          summarize_agent)
-from ecobuild_core import FEATURES, EcoBuildModels  # noqa: E402
+from ecobuild_core import FEATURES, EcoBuildModels, gap_table  # noqa: E402
 from ecobuild_econ import Assumptions, business_case, envelope_cost, geometry, present_value_factor  # noqa: E402
 
 
@@ -50,7 +50,7 @@ def test_present_value_factor_no_growth_no_discount():
 def test_business_case_baseline_is_zero_and_signs(models):
     df = pd.DataFrame([design(models, 6), design(models, 10)], index=["A", "B"])[FEATURES]
     pred = models.predict(df)
-    bc = business_case(df, pred, Assumptions(), "A", models.meta["ranges"]["gap"])
+    bc = business_case(df, pred, Assumptions(), "A", gap_table(models.meta["ranges"], df, "A"))
     assert bc.loc["A", ["extra_construction", "annual_savings", "npv"]].abs().max() == pytest.approx(0)
     assert bc.loc["B", "annual_savings"] < 0          # two-story uses more energy
     assert bc.loc["B", "savings_low"] < bc.loc["B", "annual_savings"] < bc.loc["B", "savings_high"]

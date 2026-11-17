@@ -19,7 +19,8 @@ import pandas as pd
 
 from ecobuild_agent import (OBJECTIVES, Constraints, describe_design, design_key, form_id, recommendation_text,
                             run_agent)
-from ecobuild_core import (FEATURE_LABELS, FEATURES, ORIENTATION_LABELS, TARGETS, EcoBuildModels, suggest_changes)
+from ecobuild_core import (FEATURE_LABELS, FEATURES, ORIENTATION_LABELS, TARGETS, EcoBuildModels, gap_table, pair_gap,
+                           range_half_width, suggest_changes)
 from ecobuild_econ import Assumptions, business_case, fmt_money, fmt_payback, geometry
 
 # Groq retired llama-3.3-70b-versatile from its free/Developer tiers on 2026-08-16 and recommends gpt-oss-120b
@@ -86,7 +87,7 @@ Rules:
 1. Every energy, cost, CO2, payback or NPV number you state must come from a tool result in this conversation. Never estimate numbers yourself.
 2. Designs are described by: form (1-12), orientation (north/east/south/west), glazing_pct (0, 10, 25 or 40, % of floor area) and glazing_distribution (none, uniform, north, east, south, west). Forms 1-6 are one-story, 7-12 are two-story; call list_building_forms if you need details. If the user describes a shape that is not one of the 12 forms, pick the closest form and say so.
 3. Loads are kWh per m² of floor area per year (heating and cooling). Lower is better.
-4. Always respect uncertainty: if a tool says a difference is within the model's typical error, call it "too close to call", not a win.
+4. Always respect uncertainty: if a tool says a difference is too close to call, say so, not a win. Ranges are 90% ranges calibrated on designs the model never saw: describe them as "about 9 in 10 unseen designs fall inside", never as a guarantee. If get_model_info shows a backtest track record, you may cite it when the user asks whether to trust a recommendation.
 5. Explain WHY using the SHAP drivers from the tools (e.g. height, roof area, glazing area). Give one or two concrete recommendations.
 6. Money figures are planning estimates based on editable assumptions (energy prices, placeholder unit construction costs, project floor area). Say so briefly when you give dollar figures.
 7. Limits to mention when relevant: the model was trained on 768 simulated buildings (12 forms) in one climate; it predicts heating and cooling load only (not daylight, comfort, structure or code compliance).
@@ -115,9 +116,9 @@ def _fn(name, description, properties=None, required=None):
 
 TOOLS = [
     _fn("list_building_forms", "List the 12 building forms the model knows (stories, compactness, wall/roof areas)."),
-    _fn("predict_design", "Predict heating, cooling and total load for one design, with typical error and annual energy cost/CO2.",
+    _fn("predict_design", "Predict heating, cooling and total load for one design, with its calibrated 90% range and annual energy cost/CO2.",
         {"design": _DESIGN}, ["design"]),
-    _fn("compare_designs", "Compare two designs: loads, whether the difference is real or within model error, the SHAP "
+    _fn("compare_designs", "Compare two designs: loads, whether the difference is clear or too close to call, the SHAP "
         "drivers of the difference, and the business case of design_b versus design_a.",
         {"design_a": _DESIGN, "design_b": _DESIGN}, ["design_a", "design_b"]),
     _fn("suggest_improvements", "For one design, try every orientation and window option for the SAME building form and "
@@ -136,7 +137,7 @@ TOOLS = [
          "objective": {"type": "string", "enum": ["best_value", "lowest_energy", "lowest_construction_cost", "lowest_co2"]}},
         ["baseline"]),
     _fn("get_feature_importance", "Which design features drive heating and cooling load the most overall (mean |SHAP|)."),
-    _fn("get_model_info", "Model accuracy on unseen designs, typical error ranges, data limits and the cost assumptions in use."),
+    _fn("get_model_info", "Model accuracy on unseen designs, calibrated 90% ranges and how well they held, the backtest track record of the recommendations, data limits and the cost assumptions in use."),
 ]
 
 OBJECTIVE_IDS = {"best_value": "Best value (highest NPV)", "lowest_energy": "Lowest energy use",
@@ -155,7 +156,6 @@ class EcoBuildTools:
         self.models, self.a = models, assumptions
         self.shapes = models.shapes()
         self.ranges = models.meta.get("ranges")
-        self.gap = (self.ranges or {}).get("gap")
 
     # ---------------------------------------------------------------- helpers
     def design(self, d: dict) -> dict:
@@ -185,8 +185,9 @@ class EcoBuildTools:
     def label(self, design: dict) -> str:
         return describe_design({**design, "Form": form_id(self.shapes, design)})
 
-    def _err(self, t):
-        return round(self.ranges["half_width"][t], 2) if self.ranges else None
+    def _err(self, t, design):
+        r = range_half_width(self.ranges, design["Overall_Height"], t)
+        return round(r, 2) if r is not None else None
 
     # ---------------------------------------------------------------- tools
     def list_building_forms(self):
@@ -201,12 +202,14 @@ class EcoBuildTools:
         d = self.design(design)
         df = pd.DataFrame([d])[FEATURES]
         p = self.models.predict(df).iloc[0]
-        bc = business_case(df, self.models.predict(df), self.a, df.index[0], self.gap).iloc[0]
+        bc = business_case(df, self.models.predict(df), self.a, df.index[0]).iloc[0]
         return {"design": self.label(d),
                 "heating_kwh_m2": round(p.Heating_Load, 2), "cooling_kwh_m2": round(p.Cooling_Load, 2),
                 "total_kwh_m2": round(p.Total_Load, 2),
-                "typical_error_kwh_m2": {"heating": self._err("Heating_Load"), "cooling": self._err("Cooling_Load"),
-                                         "total": self._err("Total_Load")},
+                "range_90pct_plus_minus_kwh_m2": {"heating": self._err("Heating_Load", d),
+                                                  "cooling": self._err("Cooling_Load", d),
+                                                  "total": self._err("Total_Load", d)},
+                "range_meaning": "about 9 in 10 unseen designs of this building type fall inside; not a guarantee",
                 "annual_energy_cost_usd": round(bc.energy_cost), "annual_co2_tonnes": round(bc.co2_t, 2),
                 "envelope_construction_cost_usd": round(bc.construction_cost),
                 "project_floor_area_m2": self.a.floor_area_m2}
@@ -215,9 +218,9 @@ class EcoBuildTools:
         a, b = self.design(design_a), self.design(design_b)
         df = pd.DataFrame([a, b], index=["A", "B"])[FEATURES]
         pred = self.models.predict(df)
-        bc = business_case(df, pred, self.a, "A", self.gap)
+        bc = business_case(df, pred, self.a, "A", gap_table(self.ranges, df, "A"))
         diff = float(pred.loc["B", "Total_Load"] - pred.loc["A", "Total_Load"])
-        thr = self.gap["Total_Load"] if self.gap else None
+        thr = pair_gap(self.ranges, a["Overall_Height"], b["Overall_Height"], "Total_Load")
         drivers = {}
         if self.models.shap_available():
             tot = pd.Series(0.0, index=FEATURES)
@@ -228,7 +231,7 @@ class EcoBuildTools:
             tot = tot[changed].reindex(tot[changed].abs().sort_values(ascending=False).index)
             drivers = {FEATURE_LABELS[f]: round(float(v), 2) for f, v in tot.items() if abs(v) >= 0.05}
         r = bc.loc["B"]
-        verdict = ("too close to call (within the model's typical error)" if thr and abs(diff) <= thr
+        verdict = ("too close to call (inside the model's 90% range for a difference)" if thr and abs(diff) <= thr
                    else ("design_a uses less energy" if diff > 0 else "design_b uses less energy"))
         return {
             "design_a": {"design": self.label(a), **{k: round(float(pred.loc["A", c]), 2) for k, c in
@@ -237,7 +240,7 @@ class EcoBuildTools:
                          [("heating", "Heating_Load"), ("cooling", "Cooling_Load"), ("total", "Total_Load")]}},
             "difference_b_minus_a_kwh_m2": round(diff, 2),
             "percent_difference_vs_a": round(diff / float(pred.loc["A", "Total_Load"]) * 100, 1),
-            "typical_error_for_a_difference_kwh_m2": round(thr, 2) if thr else None,
+            "range_90pct_for_the_difference_kwh_m2": round(thr, 2) if thr else None,
             "verdict": verdict,
             "shap_drivers_of_difference_kwh_m2": drivers,
             "business_case_b_vs_a": {
@@ -253,7 +256,7 @@ class EcoBuildTools:
         d = self.design(design)
         shape_row = self.shapes.loc[form_id(self.shapes, d)]
         res = suggest_changes(self.models, d, shape_row, (min_glazing_pct or 0) / 100)
-        cur, thr = res["current"], (self.gap or {}).get("Total_Load")
+        cur, thr = res["current"], pair_gap(self.ranges, d["Overall_Height"], d["Overall_Height"], "Total_Load")
         opts = []
         for name, o in res["options"].items():
             saving = float(cur.Total_Load - o.Total_Load)
@@ -263,7 +266,8 @@ class EcoBuildTools:
                          "saving_kwh_m2": round(saving, 2), "saving_pct": round(saving / float(cur.Total_Load) * 100, 1),
                          "certain": bool(thr is None or saving > thr)})
         return {"current_design": self.label(d), "current_total_kwh_m2": round(float(cur.Total_Load), 2),
-                "options": opts, "note": "Building form is kept fixed; 'certain' = saving larger than the model's typical error."}
+                "options": opts, "note": "Building form is kept fixed; 'certain' = saving larger than the model's 90% range for a difference. "
+                        "In the backtest, rotation-only suggestions were right only about 2 times in 3."}
 
     def run_design_agent(self, baseline, stories="any", fixed_orientation="free", min_glazing_pct=10,
                          max_glazing_pct=40, max_extra_budget=None, objective="lowest_energy"):
@@ -281,6 +285,32 @@ class EcoBuildTools:
                 "robust_to_cost_estimates": r.robust, "notes": r.notes,
                 "feasible_designs": int(len(r.table)) if r.table is not None else 0}
 
+    def _ranges_info(self):
+        r = self.ranges
+        if not r or "by_type" not in r:
+            return r and r.get("half_width")
+        rnd = lambda d: {k: round(float(v), 2) for k, v in d.items() if k in ("Heating_Load", "Cooling_Load", "Total_Load")}
+        return {"one_story": rnd(r["by_type"]["one_story"]), "two_story": rnd(r["by_type"]["two_story"]),
+                "difference_between_two_designs_total": {k: round(v["Total_Load"], 2) for k, v in r["gap_by_pair"].items()},
+                "coverage_on_unseen_designs_avg_total": {k: round(v["Total_Load"]["mean"], 3)
+                                                         for k, v in r["repeated"]["range"].items()},
+                "meaning": r.get("meaning")}
+
+    def _backtest_info(self):
+        b = (self.models.meta.get("backtest") or {}).get("by_design")
+        if not b:
+            return None
+        s, ag = b["suggest"], b["agent"]
+        return {"method": "app's own recommendation code run with models that never saw the design; picks scored "
+                          "against the simulated true loads",
+                "clear_suggestions_truly_saving_energy": round(s["certain"]["saves_energy"], 3),
+                "too_close_to_call_suggestions_truly_saving_energy": round(s["uncertain"]["saves_energy"], 3),
+                "rotation_only_suggestions_truly_saving_energy": round(s.get("Rotate the building", {}).get("saves_energy", 0), 3),
+                "agent_energy_picks_beating_baseline": round(ag["Lowest energy use"]["beats_baseline"], 3),
+                "agent_energy_mean_regret_kwh_m2": round(ag["Lowest energy use"]["mean_regret"], 2),
+                "agent_best_value_picks_with_true_positive_npv": round(ag["Best value (highest NPV)"]["beats_baseline"], 3),
+                "caveat": "simulated data, one climate; cost inputs are assumptions"}
+
     def get_feature_importance(self):
         imp = pd.DataFrame(self.models.meta["shap_importance"])
         return {t.replace("_", " "): {FEATURE_LABELS[f]: round(v, 2) for f, v in
@@ -292,7 +322,8 @@ class EcoBuildTools:
         m = pd.DataFrame(self.models.meta["test_metrics"])
         best = m[m.Model == "Gradient Boosting"]
         return {"accuracy_on_unseen_designs": {r.Target: {"MAE": round(r.MAE, 2), "R2": round(r.R2, 3)} for r in best.itertuples()},
-                "typical_error_kwh_m2": self.ranges["half_width"] if self.ranges else None,
+                "range_90pct_plus_minus_kwh_m2": self._ranges_info(),
+                "recommendation_backtest": self._backtest_info(),
                 "limits": ["768 simulated buildings from 12 forms, one climate (not real measured buildings)",
                            "predicts heating and cooling load only (not daylight, comfort, structure, cost or code)",
                            "money figures use editable planning assumptions, not quotes"],
