@@ -285,27 +285,476 @@
  },
  "ranges": {
   "level": 0.9,
-  "method": "5-fold GroupKFold out-of-fold absolute errors on the 153 training designs (finite-sample corrected quantile)",
-  "n_oof_rows": 612,
+  "method": "Split-conformal ranges calibrated separately for one-story and two-story buildings, from 5-fold GroupKFold out-of-fold errors on the training designs (each design's 4 orientations kept together). Score per design = its largest error over the 4 orientations. Gap ranges (for comparing two designs) use the error of the difference, per pair type.",
+  "meaning": "About 90% of designs the model has never seen fall inside the range, on average. Not a guarantee for any single design, for other building shapes or for real buildings.",
+  "by_type": {
+   "one_story": {
+    "Heating_Load": 0.6811553426625157,
+    "Cooling_Load": 1.2986210908530111,
+    "Total_Load": 1.5710454718806819,
+    "n_designs": 78
+   },
+   "two_story": {
+    "Heating_Load": 1.3897103807438071,
+    "Cooling_Load": 3.573712310122005,
+    "Total_Load": 3.794044319379193,
+    "n_designs": 75
+   }
+  },
+  "gap_by_pair": {
+   "one_story": {
+    "Heating_Load": 0.7869612862030468,
+    "Cooling_Load": 1.2794736318802187,
+    "Total_Load": 1.670052099093649
+   },
+   "two_story": {
+    "Heating_Load": 1.7261981268687698,
+    "Cooling_Load": 3.9652817552409516,
+    "Total_Load": 4.328716355695477
+   },
+   "mixed": {
+    "Heating_Load": 1.2810515820942747,
+    "Cooling_Load": 2.914747290148549,
+    "Total_Load": 3.232473717130482
+   }
+  },
   "half_width": {
-   "Heating_Load": 0.8886091908278075,
-   "Cooling_Load": 2.188763215662899,
-   "Total_Load": 2.445675134810358
+   "Heating_Load": 1.3897103807438071,
+   "Cooling_Load": 3.573712310122005,
+   "Total_Load": 3.794044319379193
   },
   "gap": {
-   "Heating_Load": 1.3115712087598972,
-   "Cooling_Load": 2.9713009695739174,
-   "Total_Load": 3.2653042258796567
+   "Heating_Load": 1.7261981268687698,
+   "Cooling_Load": 3.9652817552409516,
+   "Total_Load": 4.328716355695477
   },
-  "heldout_coverage": {
-   "Heating_Load": 0.8589743589743589,
-   "Cooling_Load": 0.9102564102564102,
-   "Total_Load": 0.9294871794871795
+  "heldout": {
+   "n_designs": 39,
+   "range": {
+    "one_story": {
+     "Heating_Load": 0.9861111111111112,
+     "Cooling_Load": 0.9305555555555556,
+     "Total_Load": 0.9305555555555556,
+     "n_rows": 72
+    },
+    "two_story": {
+     "Heating_Load": 0.9404761904761905,
+     "Cooling_Load": 1.0,
+     "Total_Load": 0.9880952380952381,
+     "n_rows": 84
+    }
+   },
+   "gap": {
+    "one_story": {
+     "Heating_Load": 0.9509803921568627,
+     "Cooling_Load": 0.860702614379085,
+     "Total_Load": 0.8308823529411765
+    },
+    "two_story": {
+     "Heating_Load": 0.9267857142857143,
+     "Cooling_Load": 0.9589285714285715,
+     "Total_Load": 0.9720238095238095
+    },
+    "mixed": {
+     "Heating_Load": 0.90625,
+     "Cooling_Load": 0.9203042328042328,
+     "Total_Load": 0.9298941798941799
+    }
+   }
   },
-  "heldout_gap_coverage": {
-   "Heating_Load": 0.900390625,
-   "Cooling_Load": 0.9049355451697396,
-   "Total_Load": 0.9191297208538588
+  "repeated": {
+   "n_splits": 30,
+   "range": {
+    "one_story": {
+     "Heating_Load": {
+      "mean": 0.9526327416706675,
+      "min": 0.8369565217391305
+     },
+     "Cooling_Load": {
+      "mean": 0.9696804225796688,
+      "min": 0.8369565217391305
+     },
+     "Total_Load": {
+      "mean": 0.9584247919033052,
+      "min": 0.8695652173913043
+     }
+    },
+    "two_story": {
+     "Heating_Load": {
+      "mean": 0.9437589831646204,
+      "min": 0.7794117647058824
+     },
+     "Cooling_Load": {
+      "mean": 0.9910610770402436,
+      "min": 0.953125
+     },
+     "Total_Load": {
+      "mean": 0.9524782147318912,
+      "min": 0.8235294117647058
+     }
+    }
+   },
+   "gap": {
+    "one_story": {
+     "Heating_Load": {
+      "mean": 0.9122035033572379,
+      "min": 0.7344367588932806
+     },
+     "Cooling_Load": {
+      "mean": 0.9236353303977858,
+      "min": 0.6973814229249012
+     },
+     "Total_Load": {
+      "mean": 0.9152626424450063,
+      "min": 0.7119565217391305
+     }
+    },
+    "two_story": {
+     "Heating_Load": {
+      "mean": 0.8833271589163616,
+      "min": 0.6498161764705882
+     },
+     "Cooling_Load": {
+      "mean": 0.9506681994571573,
+      "min": 0.875
+     },
+     "Total_Load": {
+      "mean": 0.9072704851382613,
+      "min": 0.7155330882352942
+     }
+    },
+    "mixed": {
+     "Heating_Load": {
+      "mean": 0.8932179614170903,
+      "min": 0.7547554347826086
+     },
+     "Cooling_Load": {
+      "mean": 0.9445795162760213,
+      "min": 0.8845108695652174
+     },
+     "Total_Load": {
+      "mean": 0.9159764483043524,
+      "min": 0.7975543478260869
+     }
+    }
+   }
+  }
+ },
+ "backtest": {
+  "created": "2026-11-17",
+  "by_design": {
+   "held_out_by": "design",
+   "description": "Each design predicted by a model trained without it (5-fold GroupKFold by design)",
+   "model_mae": {
+    "Heating_Load": 0.4017481893391917,
+    "Cooling_Load": 1.0779316828332386,
+    "Total_Load": 1.1753909245473104
+   },
+   "starting_designs": 720,
+   "recommendations_in_dataset": true,
+   "min_glazing": 0.1,
+   "suggest": {
+    "Rotate the building": {
+     "n": 540,
+     "saves_energy": 0.6296296296296297,
+     "mean_pred_saving": 1.5112306115586758,
+     "mean_true_saving": 0.799629629629629,
+     "mae_saving": 1.4140964600067947
+    },
+    "Change the windows": {
+     "n": 672,
+     "saves_energy": 0.8526785714285714,
+     "mean_pred_saving": 5.942829696416859,
+     "mean_true_saving": 5.375788690476192,
+     "mae_saving": 1.4453257904860952
+    },
+    "Best overall": {
+     "n": 504,
+     "saves_energy": 0.8591269841269841,
+     "mean_pred_saving": 6.470241412988201,
+     "mean_true_saving": 5.409107142857144,
+     "mae_saving": 1.4787898071778955,
+     "near_best": 0.5833333333333334,
+     "mean_regret": 0.7394047619047605,
+     "p90_regret": 1.269999999999996,
+     "share_of_best_possible": 0.8797424851154463
+    },
+    "certain": {
+     "n": 905,
+     "saves_energy": 0.9701657458563536,
+     "mean_pred_saving": 7.887551022342558,
+     "mean_true_saving": 6.861337016574587,
+     "mae_saving": 1.7036265432952071,
+     "near_best": 0.5718157181571816,
+     "mean_regret": 0.7515718157181558,
+     "p90_regret": 1.269999999999996,
+     "share_of_best_possible": 0.9056440720062333
+    },
+    "uncertain": {
+     "n": 811,
+     "saves_energy": 0.5770653514180024,
+     "mean_pred_saving": 1.1497091037729386,
+     "mean_true_saving": 0.691750924784217,
+     "mae_saving": 1.1570888541872035,
+     "near_best": 0.6148148148148148,
+     "mean_regret": 0.706148148148147,
+     "p90_regret": 1.269999999999996,
+     "share_of_best_possible": 0.40291870224226595
+    },
+    "all": {
+     "n": 1716,
+     "saves_energy": 0.7843822843822844,
+     "mean_pred_saving": 4.703174684370552,
+     "mean_true_saving": 3.9455244755244756,
+     "mae_saving": 1.4453269711118788,
+     "near_best": 0.5833333333333334,
+     "mean_regret": 0.7394047619047605,
+     "p90_regret": 1.269999999999996,
+     "share_of_best_possible": 0.8797424851154463
+    },
+    "by_option_and_flag": {
+     "Best overall \u00b7 too close to call": {
+      "n": 135,
+      "saves_energy": 0.4888888888888889,
+      "mean_pred_saving": 1.3378927427799425,
+      "mean_true_saving": 0.4765185185185198,
+      "mae_saving": 1.1576076745553585,
+      "near_best": 0.6148148148148148,
+      "mean_regret": 0.706148148148147,
+      "p90_regret": 1.269999999999996,
+      "share_of_best_possible": 0.40291870224226595
+     },
+     "Best overall \u00b7 clear": {
+      "n": 369,
+      "saves_energy": 0.994579945799458,
+      "mean_pred_saving": 8.34792995086927,
+      "mean_true_saving": 7.213712737127373,
+      "mae_saving": 1.5962954654544335,
+      "near_best": 0.5718157181571816,
+      "mean_regret": 0.7515718157181558,
+      "p90_regret": 1.269999999999996,
+      "share_of_best_possible": 0.9056440720062333
+     },
+     "Change the windows \u00b7 too close to call": {
+      "n": 188,
+      "saves_energy": 0.5106382978723404,
+      "mean_pred_saving": 1.1677102451319568,
+      "mean_true_saving": 0.8534574468085112,
+      "mae_saving": 1.246372581233889
+     },
+     "Change the windows \u00b7 clear": {
+      "n": 484,
+      "saves_energy": 0.9855371900826446,
+      "mean_pred_saving": 7.79762816096554,
+      "mean_true_saving": 7.132396694214877,
+      "mae_saving": 1.5226051362286874
+     },
+     "Rotate the building \u00b7 too close to call": {
+      "n": 488,
+      "saves_energy": 0.6270491803278688,
+      "mean_pred_saving": 1.0907152393437565,
+      "mean_true_saving": 0.6889959016393438,
+      "mae_saving": 1.1225491381329455
+     },
+     "Rotate the building \u00b7 clear": {
+      "n": 52,
+      "saves_energy": 0.6538461538461539,
+      "mean_pred_saving": 5.457605643114072,
+      "mean_true_saving": 1.8378846153846147,
+      "mae_saving": 4.150155942207532
+     }
+    }
+   },
+   "agent": {
+    "Best value (highest NPV)": {
+     "n": 720,
+     "unit": "$ NPV",
+     "recommended": 719,
+     "beats_baseline": 0.9888734353268428,
+     "mean_pred_gain": 195460.4782656595,
+     "mean_true_gain": 194847.5904171848,
+     "mean_regret": 1551.363789340104,
+     "median_true_rank": 9.0,
+     "near_best": null,
+     "median_feasible": 369.0,
+     "constraints_met": 1.0,
+     "kept_baseline": 1,
+     "kept_baseline_correct": 0.0
+    },
+    "Lowest energy use": {
+     "n": 720,
+     "unit": "kWh/m\u00b2",
+     "recommended": 716,
+     "beats_baseline": 0.9567039106145251,
+     "mean_pred_gain": 16.836257098759354,
+     "mean_true_gain": 16.051787709497205,
+     "mean_regret": 0.7901117318435749,
+     "median_true_rank": 11.0,
+     "near_best": 0.835195530726257,
+     "median_feasible": 369.0,
+     "constraints_met": 1.0,
+     "kept_baseline": 4,
+     "kept_baseline_correct": 0.0
+    }
+   },
+   "units": "kWh/m\u00b2 of total (heating + cooling) load; shares are 0-1"
+  },
+  "by_form": {
+   "held_out_by": "form",
+   "description": "Each design predicted by a model trained without its building form (leave-one-form-out)",
+   "model_mae": {
+    "Heating_Load": 3.949569884746163,
+    "Cooling_Load": 4.412474042312133,
+    "Total_Load": 7.96163948916341
+   },
+   "starting_designs": 720,
+   "recommendations_in_dataset": true,
+   "min_glazing": 0.1,
+   "suggest": {
+    "Rotate the building": {
+     "n": 540,
+     "saves_energy": 0.6185185185185185,
+     "mean_pred_saving": 1.5159641805664434,
+     "mean_true_saving": 0.8419259259259259,
+     "mae_saving": 1.5157746268830885
+    },
+    "Change the windows": {
+     "n": 672,
+     "saves_energy": 0.8794642857142857,
+     "mean_pred_saving": 5.905097892016719,
+     "mean_true_saving": 5.428913690476191,
+     "mae_saving": 1.6338341478872138
+    },
+    "Best overall": {
+     "n": 504,
+     "saves_energy": 0.8591269841269841,
+     "mean_pred_saving": 6.114943815617854,
+     "mean_true_saving": 5.347202380952383,
+     "mae_saving": 1.6995788921157817,
+     "near_best": 0.5833333333333334,
+     "mean_regret": 0.7255357142857131,
+     "p90_regret": 1.4099999999999966,
+     "share_of_best_possible": 0.880525768951795
+    },
+    "certain": {
+     "n": 934,
+     "saves_energy": 0.9411134903640257,
+     "mean_pred_saving": 7.660682285075253,
+     "mean_true_saving": 6.539421841541757,
+     "mae_saving": 2.1434046439789785,
+     "near_best": 0.5788043478260869,
+     "mean_regret": 0.7335326086956511,
+     "p90_regret": 1.4099999999999966,
+     "share_of_best_possible": 0.9058803019473161
+    },
+    "uncertain": {
+     "n": 782,
+     "saves_energy": 0.612531969309463,
+     "mean_pred_saving": 0.9126609587624397,
+     "mean_true_saving": 0.8824040920716115,
+     "mae_saving": 0.9860647954566027,
+     "near_best": 0.5955882352941176,
+     "mean_regret": 0.703897058823528,
+     "p90_regret": 1.4099999999999966,
+     "share_of_best_possible": 0.502985307097244
+    },
+    "all": {
+     "n": 1716,
+     "saves_energy": 0.7913752913752914,
+     "mean_pred_saving": 4.585535037303329,
+     "mean_true_saving": 3.961456876456877,
+     "mae_saving": 1.6159921955264738,
+     "near_best": 0.5833333333333334,
+     "mean_regret": 0.7255357142857131,
+     "p90_regret": 1.4099999999999966,
+     "share_of_best_possible": 0.880525768951795
+    },
+    "by_option_and_flag": {
+     "Best overall \u00b7 too close to call": {
+      "n": 136,
+      "saves_energy": 0.5294117647058824,
+      "mean_pred_saving": 0.9931468972760666,
+      "mean_true_saving": 0.7123529411764714,
+      "mae_saving": 1.0030728834005966,
+      "near_best": 0.5955882352941176,
+      "mean_regret": 0.703897058823528,
+      "p90_regret": 1.4099999999999966,
+      "share_of_best_possible": 0.502985307097244
+     },
+     "Best overall \u00b7 clear": {
+      "n": 368,
+      "saves_energy": 0.9809782608695652,
+      "mean_pred_saving": 8.00778180717895,
+      "mean_true_saving": 7.06008152173913,
+      "mae_saving": 1.9569832866409587,
+      "near_best": 0.5788043478260869,
+      "mean_regret": 0.7335326086956511,
+      "p90_regret": 1.4099999999999966,
+      "share_of_best_possible": 0.9058803019473161
+     },
+     "Change the windows \u00b7 too close to call": {
+      "n": 178,
+      "saves_energy": 0.6123595505617978,
+      "mean_pred_saving": 0.9722283373932233,
+      "mean_true_saving": 1.0292134831460678,
+      "mae_saving": 1.0366902765556456
+     },
+     "Change the windows \u00b7 clear": {
+      "n": 494,
+      "saves_energy": 0.9757085020242915,
+      "mean_pred_saving": 7.682528622225185,
+      "mean_true_saving": 7.014230769230769,
+      "mae_saving": 1.848999348488467
+     },
+     "Rotate the building \u00b7 too close to call": {
+      "n": 468,
+      "saves_energy": 0.6367521367521367,
+      "mean_pred_saving": 0.8666159138177116,
+      "mean_true_saving": 0.8759829059829061,
+      "mae_saving": 0.9618672834993104
+     },
+     "Rotate the building \u00b7 clear": {
+      "n": 72,
+      "saves_energy": 0.5,
+      "mean_pred_saving": 5.7367279144331995,
+      "mean_true_saving": 0.6205555555555551,
+      "mae_saving": 5.116172358877645
+     }
+    }
+   },
+   "agent": {
+    "Best value (highest NPV)": {
+     "n": 720,
+     "unit": "$ NPV",
+     "recommended": 719,
+     "beats_baseline": 0.9874826147426982,
+     "mean_pred_gain": 197415.48286578507,
+     "mean_true_gain": 194527.19064527284,
+     "mean_regret": 1871.6883853538045,
+     "median_true_rank": 10.0,
+     "near_best": null,
+     "median_feasible": 369.0,
+     "constraints_met": 1.0,
+     "kept_baseline": 1,
+     "kept_baseline_correct": 0.0
+    },
+    "Lowest energy use": {
+     "n": 720,
+     "unit": "kWh/m\u00b2",
+     "recommended": 717,
+     "beats_baseline": 0.8940027894002789,
+     "mean_pred_gain": 15.470004327136072,
+     "mean_true_gain": 14.425495118549511,
+     "mean_regret": 2.394518828451882,
+     "median_true_rank": 25.0,
+     "near_best": 0.08228730822873083,
+     "median_feasible": 369.0,
+     "constraints_met": 1.0,
+     "kept_baseline": 3,
+     "kept_baseline_correct": 0.0
+    }
+   },
+   "units": "kWh/m\u00b2 of total (heating + cooling) load; shares are 0-1"
   }
  }
 }

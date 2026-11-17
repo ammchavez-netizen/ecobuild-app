@@ -11,7 +11,7 @@ Steps
 4. Predict heating and cooling load for every candidate
 5. Estimate construction cost, energy cost, CO2, payback and NPV against the baseline
 6. Keep the Pareto frontier (nothing else is both cheaper to build and cheaper to run)
-7. Rank by the chosen objective and flag savings that are within the model's typical error
+7. Rank by the chosen objective and flag savings that are inside the model's calibrated 90% gap range
 8. Stress-test the pick against ±25% construction costs
 9. Explain the pick versus the baseline with SHAP
 """
@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from ecobuild_core import (FEATURE_LABELS, FEATURES, GLAZING_AREA_LABELS, GLAZING_DIST_LABELS, ORIENTATION_LABELS,
-                           TARGETS, EcoBuildModels, design_variants)
+                           TARGETS, EcoBuildModels, design_variants, gap_table, range_half_width)
 from ecobuild_econ import Assumptions, business_case, fmt_money, fmt_payback
 
 OBJECTIVES = {
@@ -136,7 +136,7 @@ def explain_vs_baseline(models: EcoBuildModels, base: pd.Series, pick: pd.Series
 def run_agent(models: EcoBuildModels, baseline: dict, constraints: Constraints, assumptions: Assumptions,
               explain: bool = True) -> AgentResult:
     R = AgentResult()
-    gap = (models.meta.get("ranges") or {}).get("gap")
+    ranges = models.meta.get("ranges")
     shapes = models.shapes()
     base = {**baseline, "Form": form_id(shapes, baseline)}
     base_key = design_key(base)
@@ -173,14 +173,14 @@ def run_agent(models: EcoBuildModels, baseline: dict, constraints: Constraints, 
 
     # 4. predict
     pred = models.predict(cand[FEATURES])
-    ranges = models.meta.get("ranges")
-    err = (f" Typical error ±{ranges['half_width']['Heating_Load']:.1f} (heating) and "
-           f"±{ranges['half_width']['Cooling_Load']:.1f} (cooling) kWh/m²." if ranges else "")
+    err = (f" 90% ranges for total load: ±{range_half_width(ranges, 3.5, 'Total_Load'):.1f} kWh/m² (one-story), "
+           f"±{range_half_width(ranges, 7.0, 'Total_Load'):.1f} (two-story), calibrated on designs the model never saw."
+           if ranges else "")
     R.steps.append(("Predicted energy loads",
                     f"Ran the heating and cooling models on {len(cand)} candidates.{err}"))
 
     # 5. business case
-    bc = business_case(cand[FEATURES], pred, assumptions, base_key, gap)
+    bc = business_case(cand[FEATURES], pred, assumptions, base_key, gap_table(ranges, cand, base_key))
     table = pd.concat([cand[["Form"] + FEATURES], bc], axis=1)
     if constraints.max_extra_budget is not None:
         over = table.extra_construction > constraints.max_extra_budget
@@ -207,15 +207,28 @@ def run_agent(models: EcoBuildModels, baseline: dict, constraints: Constraints, 
     if others.empty:
         R.steps.append(("Ranked options", "No feasible alternative to the baseline."))
         return R
-    ranked = others.sort_values(col, ascending=asc)
+    # Only designs that beat the baseline on the goal can be recommended. Without this, a tight budget could
+    # leave only worse designs and the "best" of them would be recommended (found by the recommendation backtest).
+    base_row = table.loc[base_key]
+    better = (others[col] > base_row[col] + 1e-9) if not asc else (others[col] < base_row[col] - 1e-9)
+    ranked = others[better].sort_values(col, ascending=asc)
+    if ranked.empty:
+        R.steps.append(("Ranked options",
+                        f"No feasible design beats the baseline on '{constraints.objective}'. Keep the baseline, or "
+                        "relax a constraint (budget, windows, orientation, stories)."))
+        R.notes.append(f"Keep the baseline: none of the {len(others)} feasible alternatives beats it on "
+                       f"'{constraints.objective}'.")
+        return R
     confident = ranked[~ranked.within_error]
     pick_key = (confident if len(confident) else ranked).index[0]
-    picks = [("Recommended", pick_key),
-             ("Most energy-efficient", others.sort_values("Total_Load").index[0]),
-             ("Lowest construction cost", others.sort_values("construction_cost").index[0])]
-    same_form = others[others.Form == base["Form"]]
+    picks = [("Recommended", pick_key)]
+    for label, c in (("Most energy-efficient", "Total_Load"), ("Lowest construction cost", "construction_cost")):
+        k = others.sort_values(c).index[0]
+        if others.loc[k, c] < base_row[c] - 1e-9:           # only if it actually improves on the baseline
+            picks.append((label, k))
+    same_form = ranked[ranked.Form == base["Form"]]
     if len(same_form):
-        picks.append(("Quick win (keep the form)", same_form.sort_values(col, ascending=asc).index[0]))
+        picks.append(("Quick win (keep the form)", same_form.index[0]))
     merged: dict = {}
     for label, key in picks:                       # one card per design, with every label it earned
         merged.setdefault(key, []).append(label)
@@ -223,7 +236,7 @@ def run_agent(models: EcoBuildModels, baseline: dict, constraints: Constraints, 
     n_unc = int(ranked.head(10).within_error.sum())
     R.steps.append(("Ranked options",
                     f"Sorted by '{constraints.objective}'. Top pick: {describe_design(table.loc[pick_key])}."
-                    + (f" {n_unc} of the top 10 options save less than the model's typical error and are marked uncertain."
+                    + (f" {n_unc} of the top 10 options save less than the model's 90% gap range and are marked too close to call."
                        if n_unc else "")))
 
     # 8. sensitivity
@@ -232,9 +245,12 @@ def run_agent(models: EcoBuildModels, baseline: dict, constraints: Constraints, 
         a2 = replace(assumptions, wall_cost=assumptions.wall_cost * f, window_cost=assumptions.window_cost * f,
                      roof_cost=assumptions.roof_cost * f, foundation_cost=assumptions.foundation_cost * f,
                      upper_floor_cost=assumptions.upper_floor_cost * f)
-        bc2 = business_case(cand.loc[table.index, FEATURES], pred.loc[table.index], a2, base_key, gap).drop(index=base_key)
+        bc2 = business_case(cand.loc[table.index, FEATURES], pred.loc[table.index], a2, base_key,
+                            gap_table(ranges, cand.loc[table.index], base_key))
+        b0, bc2 = bc2.loc[base_key, col], bc2.drop(index=base_key)
+        bc2 = bc2[(bc2[col] > b0 + 1e-9) if not asc else (bc2[col] < b0 - 1e-9)]
         bc2 = bc2[~bc2.within_error] if (~bc2.within_error).any() else bc2
-        picks.append(bc2.sort_values(col, ascending=asc).index[0])
+        picks.append(bc2.sort_values(col, ascending=asc).index[0] if len(bc2) else None)
     R.robust = all(p == pick_key for p in picks)
     R.steps.append(("Stress-tested the pick",
                     "The same design stays on top when construction costs are 25% lower or higher."
@@ -267,5 +283,5 @@ def recommendation_text(row: pd.Series) -> str:
            f"NPV {fmt_money(row.npv)}, payback {fmt_payback(row.payback_years)}, "
            f"CO2 {row.co2_saved_t_per_yr:+.1f} t/yr saved")
     if row.within_error:
-        txt += " (energy difference within model error — treat as a tie)"
+        txt += " (energy difference inside the model's 90% range — too close to call)"
     return txt

@@ -2,7 +2,7 @@
 
 Everything here is a *planning estimate*. The model predicts simulated heating and cooling loads; this module
 adds clearly labeled, user-editable assumptions (energy prices, equipment efficiency, unit construction
-costs) so that two designs can be compared in business terms. Uncertainty from the model's typical error is
+costs) so that two designs can be compared in business terms. Uncertainty from the model's calibrated gap range is
 carried through to every dollar figure.
 """
 from __future__ import annotations
@@ -114,12 +114,13 @@ def annual_energy(pred: pd.DataFrame, a: Assumptions) -> pd.DataFrame:
     }, index=pred.index)
 
 
-def money_uncertainty(a: Assumptions, gap: dict | None) -> float:
-    """Dollar-per-year uncertainty of a *difference* between two designs, from the model's typical gap error.
+def money_uncertainty(a: Assumptions, gap) -> float | pd.Series:
+    """Dollar-per-year uncertainty of a *difference* between two designs, from the calibrated gap ranges.
 
+    `gap` is one number per target (dict) or one row per design (DataFrame from ecobuild_core.gap_table).
     Adds the heating and cooling gaps (conservative). Returns 0 when the bundle has no ranges.
     """
-    if not gap:
+    if gap is None or len(gap) == 0:
         return 0.0
     heat = a.heat_price_per_kwh + a.carbon_price * a.heat_co2_per_kwh / 1000
     cool = a.cool_price_per_kwh + a.carbon_price * a.cool_co2_per_kwh / 1000
@@ -133,7 +134,7 @@ def present_value_factor(a: Assumptions) -> float:
 
 
 def business_case(designs: pd.DataFrame, pred: pd.DataFrame, a: Assumptions, baseline: str | int,
-                  gap: dict | None = None) -> pd.DataFrame:
+                  gap=None) -> pd.DataFrame:
     """Compare every design to a baseline: extra construction cost, energy savings, payback, NPV, CO2.
 
     `designs` and `pred` share an index; `baseline` is the index label of the reference design.
@@ -159,7 +160,7 @@ def business_case(designs: pd.DataFrame, pred: pd.DataFrame, a: Assumptions, bas
     out["savings_high"] = out.annual_savings + u
     out["npv_low"] = out.savings_low * pvf - out.extra_construction
     out["npv_high"] = out.savings_high * pvf - out.extra_construction
-    if gap:
+    if gap is not None and len(gap):
         out["within_error"] = (pred["Total_Load"] - pred.loc[baseline, "Total_Load"]).abs() <= gap["Total_Load"]
     else:
         out["within_error"] = False
